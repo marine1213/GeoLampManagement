@@ -710,68 +710,33 @@ $('Document').ready(function(){
    // google.script.run.withSuccessHandler(onGetUserInfoSuccess) 
    //    .getUserInfo(); 
   //mapPage.initMap();
-  makeCorsRequest();
+  callGoogleScript();
  //  	var url = GEO_LAMP_LINK;
 	// var xhr = createCORSRequest('GET', url);
 	// xhr.send();
 });
 </script>
 <!--Request API -->
-<script type="text/javascript">
-	function request(link, functionName, parameters){
-	  $.post(link, parameters,
-	  function(status){
-	    alert(status);
-	  });
-	}
+<script>
+  // Make an AJAX call to Google Script
+  function callGoogleScript() {
+    
+    var url = GEO_LAMP_LINK+"?callback=ctrlq&name=";
+    var name = "Amit Agarwal"
 
-	// Create the XHR object.
-function createCORSRequest(method, url) {
-  var xhr = new XMLHttpRequest();
-  if ("withCredentials" in xhr) {
-    // XHR for Chrome/Firefox/Opera/Safari.
-    xhr.open(method, url, true);
-  } else if (typeof XDomainRequest != "undefined") {
-    // XDomainRequest for IE.
-    xhr = new XDomainRequest();
-    xhr.open(method, url);
-  } else {
-    // CORS not supported.
-    xhr = null;
-  }
-  return xhr;
-}
+    var request = jQuery.ajax({
+      crossDomain: true,
+      url: url + encodeURIComponent(name),
+      method: "GET",
+      dataType: "jsonp"
+    });
 
-// Helper method to parse the title tag from the response.
-function getTitle(text) {
-  return text.match('<title>(.*)?</title>')[1];
-}
-
-// Make the actual CORS request.
-function makeCorsRequest() {
-  // This is a sample server that supports CORS.
-  var url = GEO_LAMP_LINK;
-
-  var xhr = createCORSRequest('GET', url);
-  if (!xhr) {
-    alert('CORS not supported');
-    return;
   }
 
-	xhr.setRequestHeader('Access-Control-Allow-Origin', '*');
-  // Response handlers.
-  xhr.onload = function() {
-    var text = xhr.responseText;
-    var title = getTitle(text);
-    alert('Response from CORS request to ' + url + ': ' + title);
-  };
-
-  xhr.onerror = function(error) {
-    alert('Woops, there was an error making the request:' + error);
-  };
-
-  xhr.send();
-}
+  // print the returned data
+  function ctrlq(e) {
+    console.log(e.result)
+  }
 </script>
 <!-- Custom Effect: Selecting Radio -->
 <script>
