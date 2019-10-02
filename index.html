@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Leaflet and Google Form GPS Data Collection</title>
+<meta version="1.4" date="20190927"/>
+<!---------------------------------------------------------------------------------------------------------------------------------->
+<!--Jquery-->
+<script   src="https://code.jquery.com/jquery-2.2.3.min.js"   integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo="   crossorigin="anonymous"></script>
+
+<!--Bootstrap for form-->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+
+<!--leaflet Plugin-->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.js"></script>
+
+<!--Leaflet -->
+<script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
+<link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
+
+<!--Location Control Plugin-->
+<script src='https://cdn.jsdelivr.net/leaflet.locatecontrol/0.49.0/L.Control.Locate.min.js'></script>
+<link href='https://cdn.jsdelivr.net/leaflet.locatecontrol/0.49.0/L.Control.Locate.css' rel='stylesheet' />
+
+<!--Tabletop and GeoJson
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tabletop.js/1.4.3/tabletop.min.js"></script>
+<script src="js/geojson.js"></script>-->
+
+<!--Fonts-->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.1/css/font-awesome.min.css">
+<link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700,900' rel='stylesheet' type='text/css'>
+<!---------------------------------------------------------------------------------------------------------------------------------->
+
+<!--Leaflet Style-->
+<style>
+*{font-family: 'Source Sans Pro', sans-serif;}
+.map {height: 100%}
+#map {position : absolute;height : 100%;width : 100vw}
+.leaflet-popup-content {font-size: medium;}
+.form-group{width:300px;margin-bottom:0;}
+.form-control{resize:none;}
+.text-muted{font-size:smaller;}
+hr {margin: 10px 0;}
+#UppyModalOpenerBtn{display:none;}
+.center { top:50%; left:50%; position: fixed; transform: translate(-50%, -50%); }
+.red-text {color: #ff0000}
+.overlay {
+  position: fixed; /* Sit on top of the page content */
+  display: none; /* Hidden by default */
+  width: 100%; /* Full width (cover the whole page) */
+  height: 100%; /* Full height (cover the whole page) */
+  top: 0; left: 0; right: 0;bottom: 0; 
+  background-color: rgba(0,0,0,0.5); /* Black background with opacity */
+  cursor: pointer; /* Add a pointer on hover */
+  z-index: 2; /* Specify a stack order in case you're using a different order for other elements */
+}
+</style>
+<!---------------------------------------------------------------------------------------------------------------------------------->
+</head>
+<body>
+<!---------------------------------------------------------------------------------------------------------------------------------->
+<div class="overlay" id="input_form">
+  <div class="center panel panel-primary">
+      <div class="panel-heading" > Thông báo tình trạng Đèn và Biển báo Khu bay
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="false" onclick="closeOverlayForm()"> &times;</button> 
+      </div>
+      <div class="panel-body">
+         
+          <form role="form" id="form_body">
+				<div class="form-group">
+					<div class="form-check form-check-inline" id="form_radio_status">
+						<div class="form-check-inline" >
+							<input class="form-check-input" type="radio" name="nv" value="Bị nứt vỡ, gãy, nghiêng" checked>
+							<label class="form-check-label">Bị nứt vỡ, gãy, nghiêng</label>
+						</div>
+						
+						<div class="form-check-inline">
+							
+							<input class="form-check-input" type="radio" name="nv" value="Bóng không sáng, không hoạt động">
+							<label class="form-check-label">Bóng không sáng, không hoạt động</label>
+						</div>
+					</div>
+                    <div class="form-check form-check-inline" style="display:none" id="form_radio_done">
+						<div class="form-check-inline" >
+							<input class="form-check-input" type="radio" name="nv" value="Đã xử lý xong" disabled checked>
+							<label class="form-check-label">Đã xử lý xong</label>
+						</div>
+					</div>
+					<input id="form_radio_checked" class="form-check-input" type="hidden" value="init">
+					<div class="form-group">
+						<label>Mô tả bằng hình ảnh</label>
+ 					    <input id="files_input" type="file" accept="image/*" > 
+					</div>
+					<div class="form-group">
+						<label>Mô tả bằng văn bản</label>
+						<textarea id="form_text" class="form-control" rows="1" placeholder="Theo dạng: Tên đèn; Mô tả khác..."></textarea>
+					</div>
+					<em class="text-muted">Chọn một điểm trên bản đồ và thêm thông tin.</em>
+					<hr />
+				</div>
+				<button type='button' onclick="formSubmitting(event);" id="form_button">Submit</button>
+			</form>
+			<div id="form_output"></div>
+        </div>
+   </div>
+</div>
+<div id="map" class="map"></div>
+
+<!---------------------------------------------------------------------------------------------------------------------------------->
+<!-- user interface -->
+<script>
+//========================================================================
+    
+   //<!--Custom Effect: Overlay-->
+   function openOverlayForm(showStatus, formButtonVal) {
+     document.getElementById("input_form").style.display = "block";
+     $("#form_body").show();
+     $('#form_output').hide();
+     $('#form_button').val(formButtonVal);
+     
+     if(formButtonVal == -1){ // Nếu chưa có data
+       document.getElementById("form_text").placeholder="Theo dạng: Tên đèn; Mô tả khác...";
+     }else{// Nếu đã có rồi tương ứng với id trong mảng đã lưu
+       document.getElementById("form_text").placeholder="Mô tả khác...";
+     }
+     
+     if(showStatus == true) { //nếu báo xong, buttonId sẽ khác -1
+       $('#form_radio_status').show();
+       $('#form_radio_done').hide();
+     }
+     else{
+       $('#form_radio_status').hide();
+       $('#form_radio_done').show();     
+       $(".form-check-input").prop('checked', true);
+       $('#form_radio_checked').val('Đã xử lý xong');
+     }
+   }
+   
+   function closeOverlayForm () {
+     document.getElementById("input_form").style.display = "none";
+     resetInputForm();
+   }
+   
+   function resetInputForm(){
+     $(".form-check-input").prop('checked', false);
+     $("#form_radio_checked").val("init");
+     $('#files_input').val("");
+   }
+   
+   //===========show function===============
+   
+   function showError(error){
+     $('#form_output').addClass('red-text').html(error);
+     return false;
+   }   
+   function showMessage(message){
+     $('#form_output').removeClass('red-text').html(message);
+   }
+   
+   //===========event handle functions============
+   function onSlideUpdated(){
+     log.event('onSlideUpdated','Slide Updated');
+   }
+</script>
+<script>
+//==================log==================
+var log = function(){
+  var publicData = {};
+  
+  //=======private function========
+  function logMethod(logString){
+    alert(logString);
+  }
+  
+  //=======public function========
+  publicData.event = function(tag, eventString){
+//    logMethod('Event: '+ tag + ' - ' +eventString);
+  }
+  
+  publicData.value = function(tag, valueString){
+//    logMethod('Value: '+ tag + ' - ' + valueString);
+  }
+  
+  publicData.error = function(tag, errorString){
+    logMethod('Error: '+ tag + ' - ' + errorString);
+  }  
+  return publicData;
+}();
+  var loadedSheetData = [];
+</script>
+
+
+<!-- Form script -->
+<script>
+//============================form control========================================
+var form = (function(){
+   // main properties
+   var publicData = {};
+   var imgLinkData = [];
+   
+   // form properties
+   var data;
+   var lat,lng;
+   var userName, userEmail;
+   
+   //===========private function==============
+   
+   function getFormattedDate(date) {
+     var year = date.getFullYear();
+     
+     var month = (1 + date.getMonth()).toString();
+     //  month = month.length > 1 ? month : '0' + month;
+     
+     var day = date.getDate().toString();
+     //  day = day.length > 1 ? day : '0' + day;
+     
+     var hours = date.getHours().toString();
+     hours = hours.length > 1 ? hours : '0' + hours;
+     
+     var minutes = date.getMinutes().toString();
+     minutes = minutes.length > 1 ? minutes : '0' + minutes;
+     
+     var seconds = date.getSeconds().toString();
+     seconds = seconds.length > 1 ? seconds : '0' + seconds;
+     
+     var milliSeconds = date.getMilliseconds().toString();
+     milliSeconds = milliSeconds.length > 2 ? milliSeconds : '0' + milliSeconds;
+     milliSeconds = milliSeconds.length > 1 ? milliSeconds : '0' + milliSeconds;
+     
+     return month + '/' + day + '/' + year + ' ' + hours + ':' + minutes + ':' + seconds+'.'+ milliSeconds;
+   }
+ 
+   //<!-- File reader -->
+   var reader = new FileReader();
+   var attachedImg;
+   
+   reader.onloadend = function(e) {
+     if (e.target.error != null) {
+       showError("Có lỗi khi đọc " + attachedImg.name + ": " + e.target.error);
+       return;
+     } else {
+     	//TODO
+       google.script.run
+         .withSuccessHandler(onFileTransmittingSucces)
+         .uploadFileToGoogleDrive(e.target.result, attachedImg.name);
+     }
+   };
+   
+
+   function sendData(){
+   	//TODO
+     google.script.run.withSuccessHandler(formSubmitted) 
+      .writeForm(data);  
+   }
+   
+   //===========public function===============
+   publicData.setUserInfo = function(newName,newEmail){
+     userName = newName;
+     userEmail = newEmail;
+   }
+   
+   publicData.setLatLng = function(newlat,newlng){
+     lat = newlat;
+     lng = newlng;
+   }
+   
+   publicData.setData = function(status,fileId,tileName, detail) {
+     var date = getFormattedDate(new Date());   // chuyển Object Date về dạng String 
+     // '?' giúp tăng số last row lên, nếu để trống, dòng này coi như không có mới
+     data = ['?', date, lat+'', lng+'', tileName, status, fileId, '', detail,userName, userEmail];
+   }
+   
+   publicData.getData = function() {
+     return data;
+   }
+   
+   publicData.getImgLinkData = function(id){
+     return imgLinkData[id];
+   }
+   
+   publicData.setImgLinkData = function(id, item){
+     imgLinkData[id] = item;
+   }
+   
+   publicData.sendDataWithFile = function(file) {
+     showMessage("Đang gửi ảnh...");
+     reader.readAsDataURL(file);
+     attachedImg = file;
+   }
+      
+   publicData.sendDataToSheet = function(fileId){
+    showMessage('Đang gửi thông tin...');
+    var status = $("#form_radio_checked").val();
+    var inputText = $("#form_text").val();
+    var buttonId = $('#form_button').val();
+    
+    
+    if(buttonId == -1){ //status != 'Đã xử lý xong'(báo đã xong)/sự cố khác(thêm sự cố mới)
+      var text = inputText.split(';');
+      var tileName = text[0];
+//      var tileSize = text[1]?text[1]:'';
+      var detailStartId = tileName.length + 1; //tileSize.length + 2;
+      var detail = text[1]?inputText.substring(detailStartId):'';
+      //param: status,fileId,tileName,tileSize,detail
+      form.setData(status,fileId,tileName,detail);
+    }else{
+      var item = loadedSheetData[buttonId];
+      mapPage.getLoadedMarkerList(item[3]).closePopup(); // xóa popup
+      
+      var detail = '';
+      if(status == 'Đã xử lý xong'){
+        detail += item[4] + ((item[7].length == 0) ? ' ' : ' - ' + item[7]); // thêm 1 dấu cách để có tác dụng cho hàm indexof
+        detail += (inputText.length == 0)? '' : ' - ' + inputText;
+      }else
+        detail = inputText;
+      
+      mapPage.closePopup(item[3]);
+      // param: status,googleDrivefileId,tileName,tileSize,detail
+      form.setLatLng(item[1],item[2]);
+      form.setData(status,fileId,item[3],detail); 
+    }
+    
+    setTimeout(function() {
+      sendData();
+    }, 100);
+  }
+  
+  publicData.sendDoneToSheet = function(buttonId){ 
+
+    sendData();
+  }
+   //===========event handle function============
+   
+   function formSubmitted(status) { // sẽ được gọi khi form được mở ra
+     showMessage(status); //displays in item with the 'output' id
+     log.event('formSubmitted','form is submitted');
+     $("#form_body").hide();
+     resetInputForm();
+     //TODO
+     google.script.run.withSuccessHandler(loadedDataFromSheet) 
+      .loadDataFromSpreadSheet(loadedSheetData); 
+   }
+
+   function onFileTransmittingSucces(e) { 
+     showMessage('Đã gửi ảnh xong.')
+     setTimeout(function() {
+       //Gửi ảnh xong thì lấy thông tin để vào form
+       publicData.sendDataToSheet(e);
+     }, 100);
+   }
+   //============================================
+   return publicData;
+})();
+//============================end========================================
+//=================Event Handler & Data Handler===========================
+function formSubmitting(event){
+  event.preventDefault();      // ngăn tạo trang trắng
+    
+  $('#form_output').show();
+  var result = onValidateInputData();
+  if(result == false)
+    return;
+  
+  var files = $('#files_input')[0].files;
+  
+  if (files.length === 0) {
+     // upload khong co file
+     form.sendDataToSheet("");
+     return false;
+  }
+  
+  var file = files[0];
+  if (file.size > 1024 * 1024 * 5) {
+     showError("Chỉ hỗ trợ upload ảnh nhỏ hơn 5MB!");
+     return false;
+  }
+  
+  form.sendDataWithFile(file);
+}
+function onValidateInputData(){ // các trường bắt buộc phải có
+  var radio_checking = $("#form_radio_checked").val();
+  
+  if(radio_checking == 'init')
+    return showError('Loại sự cố (nứt vỡ,...) phải được chọn.');
+  
+    
+  var inputTextChecking = $("#form_text").val();
+  var buttonId = $('#form_button').val();
+  
+  if(buttonId == -1){ //status != 'Đã xử lý xong'(báo đã xong)/sự cố khác(thêm sự cố mới)
+    var text = inputTextChecking.split(';');
+    var tileNameChecking = text[0];
+    if(tileNameChecking.length == 0)
+      return showError('Tên đèn không được để trống!');
+    
+//    var tileSizeChecking = text[1]?text[1]:'';
+//    if(tileSizeChecking.length == 0)
+//      return showError('Số đế không được để trống!');
+  }
+  return true;
+}
+//========================================================================    
+   //TODO: doi icon cho data marker:DONE
+   //TODO: bat popup xem thong tin:DONE
+   //TODO: hien thi nhieu su co tren 1 tam:DONE
+   //TODO: hien thi anh tren popup:DONE
+   //TODO: them chuc nang bao da xong:DONE
+   function loadedDataFromSheet(output){
+     log.event('loadedDataFromSheet','Data loaded from sheet');
+     var shouldBeDeleted = output.shouldBeDeleted;
+     var dataList = output.updatingList;
+     //alert(shouldBeDeleted);
+     var loadedDataOldLength = loadedSheetData.length;
+     for(var listId = 0; listId < dataList.length; listId++){   
+       loadedSheetData.push(dataList[listId]); 
+     }
+     
+     var imgIdList = [];
+     var displayDataId = groupByIndex(loadedSheetData, 3); // nhóm theo tên đèn
+     for(var tileName in displayDataId) { 
+     var sucoIdList = displayDataId[tileName];
+     
+     var popupContent;
+     var isDeleted = false;
+     //-tao marker voi suco dau tien 
+     //-suco dau tien thi them ,b>ten o </b> vao popupcontent
+     //-suco tiep theo thi append timestamp + status popupcontent
+     //-neu suco bi danh dau xoa thi xoa trong loadedData va idgrouped, neu idgrouped da het thi xoa marker tuong ung    
+     //-chay het vong lap thi them popup vao marker tuong ung voi ten o
+     for(var ddId = 0; ddId < sucoIdList.length; ddId++){
+       var tempId = sucoIdList[ddId];
+       
+       var listItem = loadedSheetData[tempId];
+       log.value('loadedDataFromSheet',loadedSheetData[tempId] + ' - ' + shouldBeDeleted[tempId] + ' - ' + sucoIdList.length);
+       if(shouldBeDeleted[tempId] == true){
+         log.event('loadedDataFromSheet','xoa marker');
+         // Day la id cua suco sai, xoa mot dong trong data
+         loadedSheetData.splice(tempId, 1);
+         sucoIdList.splice(ddId, 1);
+         ddId--;
+         if(sucoIdList.length == 0){
+           // khi khong con data trong marker -> xoa marker sai
+           mapPage.removeMarker(tileName);
+           isDeleted = true;
+         }
+         continue;
+       }
+      // moi id duoc luu la duy nhat trong list da duoc group -> chi danh cho cac truong hop truoc sau
+      //trong cung mot truong hop -> chi them doi voi id dau tien (==0)
+      if(tempId >= loadedDataOldLength && ddId == 0){
+        log.event('loadedDataFromSheet','Add marker '+tileName);  // Day la id cua marker moi --> them marker
+        var tempMarker = mapPage.addMarker(listItem[1],listItem[2],tileName);
+        tempMarker.eventIdList = sucoIdList;
+      }
+      switch(ddId){
+        case 0:
+          popupContent = "<div><b>"+listItem[3]+"</b>";
+        default:
+          popupContent += "<br>"+listItem[0]+' - '+listItem[4];
+          popupContent += "<br>Mô tả:"+listItem[7];
+          popupContent += "<br>Số đế:"+listItem[6];
+          if(listItem[5].length > 0){            
+            var hrefLink = 'https://drive.google.com/open?id='+listItem[5];
+            // Credit to: https://www.w3schools.com/html/html_images.asp
+            // Credit to: https://www.w3schools.com/tags/att_a_target.asp
+            var errorString = "'Lỗi hiển thị, ấn vào dòng này để xem ảnh'"
+            popupContent += "<br><a href="+hrefLink+" target=\"_blank\"><img id=img_"+listItem[5]+" alt="+errorString+"  style='max-width:9s0px;max-height:110px;width:auto;height:auto;'></a>";
+            // Credit to: https://stackoverflow.com/questions/12991351/css-force-image-resize-and-keep-aspect-ratio 
+            
+            imgIdList.push(listItem[5]); // dùng để load tất cả link ảnh ở cuối hàm
+            var tempImgMarker = mapPage.getLoadedMarkerList(tileName);
+            
+            (tempImgMarker.imageIdList = tempImgMarker.imageIdList||[]).push(listItem[5]); // dùng để lấy ảnh khi có click vào marker             
+          }
+          // Them button
+          var buttonId = "button_"+tempId;
+          popupContent += "<br><button type='button' id="+buttonId+" '>Báo đã xử lý xong</button></br>";
+        
+        }
+      }
+      if(!isDeleted){
+        popupContent += "<br><button type='button' onclick=\'openOverlayForm(true,"+tempId+");\'>Báo sự cố khác</button></br>";
+        tempMarker = mapPage.getLoadedMarkerList(tileName);
+        tempMarker.popupContentData = popupContent + '</div>';
+        tempMarker.on('click', onPopupData);
+      }
+      //============
+    }
+    getDriveImgLink(imgIdList);
+  }
+
+function getDriveImgLink(linkIdList){
+	//TODO
+    google.script.run.withSuccessHandler(function(outputDataList){
+    for(var odlId = 0; odlId < outputDataList.length; odlId++){
+      var outputDataItem = outputDataList[odlId];
+      var imageLink = outputDataItem.imgUrl;
+      var fileId = outputDataItem.fileId;
+      var error = outputDataItem.error;
+      
+      if(error.length == 0)
+        form.setImgLinkData(fileId, imageLink);
+      else
+        alert(error);
+    }
+  }).getGoogleDriveImageLink(linkIdList);  
+}
+
+function groupByIndex(dataList, index){
+   var outputIdList = [];
+   for(var listId = 0; listId < dataList.length; listId++){
+     var key = dataList[listId][index];
+     (outputIdList[key] = outputIdList[key] || []).push(listId);
+     //Credit to: https://stackoverflow.com/questions/41828883/what-does-a-a-mean
+     //Credit to: https://stackoverflow.com/questions/14446511/most-efficient-method-to-groupby-on-an-array-of-objects
+     //Credit to: https://gist.github.com/JamieMason/0566f8412af9fe6a1d470aa1e089a752
+   }
+  return outputIdList;
+}
+
+function onPopupData(event){
+  // them nut gui da xu ly xong
+
+  var popup = this.bindPopup(this.popupContentData).openPopup();
+  for(var ddId = 0; ddId < this.eventIdList.length; ddId++){
+    var tempId = this.eventIdList[ddId];
+    var buttonId = 'button_'+tempId;
+    document.getElementById(buttonId).addEventListener("click", function(){openOverlayForm(false,tempId);}); 
+  }
+        
+  if(this.imageIdList)
+    for(var iilId = 0; iilId < this.imageIdList.length; iilId++){
+      var fileId = this.imageIdList[iilId];
+      var imageLink = form.getImgLinkData(fileId);
+      document.getElementById('img_'+fileId).src = imageLink;
+    } 
+    // xoa popup di neu khong se chi hien o 1 vi tri
+  popup.on('popupclose',function(event){this.unbindPopup(); });
+}
+
+</script>
+
+<!-- Leaflet Script -->
+<script>
+//================================map control===============================
+var mapPage = function(){
+
+  var publicData = {};
+  var loadedMarkerList = [];
+  var currentMarker = {lMarker:null, lCircler:null};
+  var lastMarkerFlag = false;
+  
+  var map = L.map('map', {
+    fullscreenControl: true,
+    //Credit to: https://github.com/Leaflet/Leaflet.fullscreen
+}); //Initialize the map
+  
+  //Add a Satellite basemap
+  var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }).addTo(map);
+
+  //Add Location Options - override the plugin default popup and circle
+  const locOptions = {
+    drawCircle: false,
+    showPopup: false,
+    follow:true,
+    enableHighAccuracy: true,
+  };
+
+  const myIcon = L.icon({
+    iconUrl:'https://image.flaticon.com/icons/svg/148/148878.svg',
+    iconSize: [40, 40],
+    iconAnchor: [6, 41],
+    popupAnchor: [ 5, -34],
+  });
+  
+//==========private===============
+  //Add Location
+  var loc = L.control.locate(locOptions).addTo(map);
+   
+  map.on('locationfound', onLocationFound);
+  map.on('locationerror', function(e) {
+    log.error('locationError',e.message);
+  });
+  map.on('click', onMapClick);
+  map.on('moveend', function(e){
+  // load data(coordinate, ten tam, su co, ngay) từ spreadsheet// theo vung zoom nhìn thấy
+  // add marker theo coordinate
+  // add popup theo onclick
+  //TODO
+    google.script.run.withSuccessHandler(loadedDataFromSheet) 
+        .loadDataFromSpreadSheet(loadedSheetData); 
+  });
+  
+//==========public===============      
+  publicData.initMap = function(){
+    //https://leafletjs.com/reference-1.5.0.html
+    map.setView([21.2200016,105.8066136], 15); // Noi Bai
+    log.event('initMap','on load map');
+  }
+  
+  publicData.startTracking = function(){
+    loc.start();
+  }
+  
+  publicData.stopTracking = function(){
+    loc.stop();
+  }
+  
+  publicData.addMarker = function(lat,lng,name){
+    var tempMarker = L.marker([lat, lng], {icon:myIcon, title: name}).addTo(map);
+    loadedMarkerList[name] = tempMarker;
+    return tempMarker;
+  }
+  
+  publicData.removeMarker = function(name){
+    loadedMarkerList[name].closePopup();
+    map.removeLayer(loadedMarkerList[name]);
+    loadedMarkerList[name] = null;
+  }
+
+  publicData.closePopup = function(name){
+    loadedMarkerList[name].closePopup();
+  }
+  
+  publicData.getLoadedMarkerList = function(name){
+    return loadedMarkerList[name];
+  }
+  
+  publicData.setLoadedMarkerList = function(name,item){
+    loadedMarkerList[name] = item;
+  }
+  
+  publicData.onAddDataMarker = function(e) {
+    // xoa marker cũ
+    if(lastMarkerFlag)
+      removeLastMarker();
+    // thêm marker mới và mở form nhập
+    collectData(e);
+  }
+//=====private data process=======
+function collectData(data) {
+  form.setLatLng(data.latlng.lat,data.latlng.lng);
+  
+  if (data.accuracy) {
+    var radius = (data.accuracy / 2) * 3.28084;
+    currentMarker.lCircle = L.circle(data.latlng, radius).addTo(map);
+  }
+  currentMarker.lMarker = L.marker(data.latlng).addTo(map);
+  lastMarkerFlag = true;
+  
+  currentMarker.lMarker.on('click', function(event){
+      openOverlayForm(true,-1);
+  });
+  
+  setTimeout(function() { // smoth openning popup
+    openOverlayForm(true,-1);
+  }, 100);
+}
+
+function removeLastMarker(){
+    map.removeLayer(currentMarker.lMarker);
+    if (map.hasLayer(currentMarker.lCircle)) {
+      map.removeLayer(currentMarker.lCircle);
+    }
+}
+
+      return publicData;
+}();
+
+function onLocationFound(e){
+   try{
+// xóa marker cũ, thêm marker mới và mở form nhập
+     if(e != undefined){
+       mapPage.onAddDataMarker(e);
+     }
+   }catch(error){
+      log.error('mapLocationfound',error);
+   }
+}
+function onMapClick(e){
+   try{
+// xóa marker cũ, thêm marker mới và mở form nhập
+     if(e != undefined){
+       mapPage.onAddDataMarker(e);
+     }
+   }catch(error){
+      log.error('mapClick',error);
+   }
+}
+//============================end========================================
+</script>
+<!-- General Document Event Flow -->
+<script>
+   function onGetUserInfoSuccess(userInfo){
+     if(userInfo.error == 0){
+       form.setUserInfo(userInfo.name, userInfo.email);
+     }else{
+       alert(userInfo.error);
+     }
+   }
+   
+   const GEO_LAMP_LINK = 'https://script.google.com/macros/s/AKfycbx-90BQb99-kaPNRGPdgc0O2EoGCmOBGOvsgPWMsPI/dev';
+$('Document').ready(function(){
+	//TODO
+	// request(GEO_LAMP_LINK,'getUserInfo',{name: "Donald Duck",city: "Duckburg"})
+   // google.script.run.withSuccessHandler(onGetUserInfoSuccess) 
+   //    .getUserInfo(); 
+  //mapPage.initMap();
+  makeCorsRequest();
+ //  	var url = GEO_LAMP_LINK;
+	// var xhr = createCORSRequest('GET', url);
+	// xhr.send();
+});
+</script>
+<!--Request API -->
+<script type="text/javascript">
+	function request(link, functionName, parameters){
+	  $.post(link, parameters,
+	  function(status){
+	    alert(status);
+	  });
+	}
+
+	// Create the XHR object.
+function createCORSRequest(method, url) {
+  var xhr = new XMLHttpRequest();
+  if ("withCredentials" in xhr) {
+    // XHR for Chrome/Firefox/Opera/Safari.
+    xhr.open(method, url, true);
+  } else if (typeof XDomainRequest != "undefined") {
+    // XDomainRequest for IE.
+    xhr = new XDomainRequest();
+    xhr.open(method, url);
+  } else {
+    // CORS not supported.
+    xhr = null;
+  }
+  return xhr;
+}
+
+// Helper method to parse the title tag from the response.
+function getTitle(text) {
+  return text.match('<title>(.*)?</title>')[1];
+}
+
+// Make the actual CORS request.
+function makeCorsRequest() {
+  // This is a sample server that supports CORS.
+  var url = GEO_LAMP_LINK;
+
+  var xhr = createCORSRequest('GET', url);
+  if (!xhr) {
+    alert('CORS not supported');
+    return;
+  }
+
+	xhr.setRequestHeader('Access-Control-Allow-Origin', '*');
+  // Response handlers.
+  xhr.onload = function() {
+    var text = xhr.responseText;
+    var title = getTitle(text);
+    alert('Response from CORS request to ' + url + ': ' + title);
+  };
+
+  xhr.onerror = function(error) {
+    alert('Woops, there was an error making the request:' + error);
+  };
+
+  xhr.send();
+}
+</script>
+<!-- Custom Effect: Selecting Radio -->
+<script>
+$("input[type=radio]").change(function () {
+    $("#form_radio_checked").val(this.value);
+});
+</script>
+<!-- The End -->
+
+</body>
+</html>
