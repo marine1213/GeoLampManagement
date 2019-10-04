@@ -177,7 +177,7 @@ var log = function(){
   
   //=======public function========
   publicData.event = function(tag, eventString){
-//    logMethod('Event: '+ tag + ' - ' +eventString);
+   logMethod('Event: '+ tag + ' - ' +eventString);
   }
   
   publicData.value = function(tag, valueString){
@@ -242,18 +242,24 @@ var form = (function(){
        showError("Có lỗi khi đọc " + attachedImg.name + ": " + e.target.error);
        return;
      } else {
+     	showMessage('Đang gửi ảnh');
      	//TODO
-       google.script.run
-         .withSuccessHandler(onFileTransmittingSucces)
-         .uploadFileToGoogleDrive(e.target.result, attachedImg.name);
+       // google.script.run
+       //   .withSuccessHandler(onFileTransmittingSucces)
+       //   .uploadFileToGoogleDrive(e.target.result, attachedImg.name);
+        var inputParam = 'name=' + encodeURIComponent(attachedImg.name);
+        inputParam += '&data=' + encodeURIComponent(JSON.stringify(e.target.result));
+        callGETGoogleScript('uploadFileToGoogleDrive',inputParam,'onFileTransmittingSucces');
      }
    };
    
 
    function sendData(){
    	//TODO
-     google.script.run.withSuccessHandler(formSubmitted) 
-      .writeForm(data);  
+     // google.script.run.withSuccessHandler(formSubmitted) 
+     //  .writeForm(data);  
+     var inputParam = 'inputParam=' + encodeURIComponent(JSON.stringify(data));
+     callGETGoogleScript('writeForm',inputParam,'formSubmitted');
    }
    
    //===========public function===============
@@ -286,7 +292,7 @@ var form = (function(){
    }
    
    publicData.sendDataWithFile = function(file) {
-     showMessage("Đang gửi ảnh...");
+     showMessage("Đang đọc ảnh...");
      reader.readAsDataURL(file);
      attachedImg = file;
    }
@@ -340,8 +346,9 @@ var form = (function(){
      $("#form_body").hide();
      resetInputForm();
      //TODO
-     google.script.run.withSuccessHandler(loadedDataFromSheet) 
-      .loadDataFromSpreadSheet(loadedSheetData); 
+     // google.script.run.withSuccessHandler(loadedDataFromSheet) 
+     //  .loadDataFromSpreadSheet(loadedSheetData); 
+      callScriptUpdateSheetData()
    }
 
    function onFileTransmittingSucces(e) { 
@@ -494,19 +501,25 @@ function onValidateInputData(){ // các trường bắt buộc phải có
 
 function getDriveImgLink(linkIdList){
 	//TODO
-    google.script.run.withSuccessHandler(function(outputDataList){
+    // google.script.run.withSuccessHandler().getGoogleDriveImageLink(linkIdList); 
+    var linkIdListString = JSON.stringify(linkIdList);
+    var inputParam = 'inputParam=' + encodeURIComponent(linkIdListString);
+
+    callGETGoogleScript('getGoogleDriveImageLink',inputParam, 'onGetDriveImgSuccess');
+}
+
+function onGetDriveImgSuccess(outputDataList){
     for(var odlId = 0; odlId < outputDataList.length; odlId++){
-      var outputDataItem = outputDataList[odlId];
-      var imageLink = outputDataItem.imgUrl;
-      var fileId = outputDataItem.fileId;
-      var error = outputDataItem.error;
+    	var outputDataItem = outputDataList[odlId];
+    	var imageLink = outputDataItem.imgUrl;
+    	var fileId = outputDataItem.fileId;
+	    var error = outputDataItem.error;
       
-      if(error.length == 0)
-        form.setImgLinkData(fileId, imageLink);
-      else
-        alert(error);
-    }
-  }).getGoogleDriveImageLink(linkIdList);  
+    	if(error.length == 0)
+          form.setImgLinkData(fileId, imageLink);
+      	else
+          alert(error);
+  	}
 }
 
 function groupByIndex(dataList, index){
@@ -590,10 +603,10 @@ var mapPage = function(){
   map.on('moveend', function(e){
   // load data(coordinate, ten tam, su co, ngay) từ spreadsheet// theo vung zoom nhìn thấy
   // add marker theo coordinate
-  // add popup theo onclick
-  //TODO
+  // add popup theo onclickloadedDataFromSheet
     // google.script.run.withSuccessHandler(loadedDataFromSheet) 
     //     .loadDataFromSpreadSheet(loadedSheetData); 
+    callScriptUpdateSheetData();
   });
   
 //==========public===============      
@@ -699,6 +712,7 @@ function onMapClick(e){
    function onGetUserInfoSuccess(userInfo){
      if(userInfo.error == 0){
        form.setUserInfo(userInfo.name, userInfo.email);
+       alert(userInfo.name);
      }else{
        alert(userInfo.error);
      }
@@ -706,37 +720,51 @@ function onMapClick(e){
    
    const GEO_LAMP_LINK = 'https://script.google.com/macros/s/AKfycbx-90BQb99-kaPNRGPdgc0O2EoGCmOBGOvsgPWMsPI/dev';
 $('Document').ready(function(){
-	//TODO
-	// request(GEO_LAMP_LINK,'getUserInfo',{name: "Donald Duck",city: "Duckburg"})
    // google.script.run.withSuccessHandler(onGetUserInfoSuccess) 
    //    .getUserInfo(); 
+  callGETGoogleScript('getUserInfo','','onGetUserInfoSuccess');
   mapPage.initMap();
-  callGoogleScript();
- //  	var url = GEO_LAMP_LINK;
-	// var xhr = createCORSRequest('GET', url);
-	// xhr.send();
 });
 </script>
 <!--Request API -->
 <script>
   // Make an AJAX call to Google Script
-  function callGoogleScript() {
+  function callGETGoogleScript(scriptFunc, param, callback) {
     
-    var url = GEO_LAMP_LINK+"?callback=ctrlq&name=";
-    var name = "Amit Agarwal"
+    var url = GEO_LAMP_LINK+"?func="+scriptFunc+"&callback="+callback;
+    url += param.length > 0?'&'+param:'';
 
     var request = jQuery.ajax({
       crossDomain: true,
-      url: url + encodeURIComponent(name),
+      url: url,
       method: "GET",
       dataType: "jsonp"
     });
+  }
 
+  function callScriptUpdateSheetData(){
+    var tempLoadedDataString = JSON.stringify(loadedSheetData);
+    var inputParam = 'inputParam=' + encodeURIComponent(tempLoadedDataString);
+    callGETGoogleScript('loadDataFromSpreadSheet',inputParam,'loadedDataFromSheet');
   }
 
   // print the returned data
   function ctrlq(e) {
     console.log(e.result)
+  }
+
+    // Make an AJAX call to Google Script
+  function callPOSTGoogleScript(scriptFunc, param, callback) {
+    
+    var url = GEO_LAMP_LINK+"?func="+scriptFunc+"&callback="+callback;
+    url += param.length > 0?'&'+param:'';
+
+    var request = jQuery.ajax({
+      crossDomain: true,
+      url: url,
+      method: "GET",
+      dataType: "jsonp"
+    });
   }
 </script>
 <!-- Custom Effect: Selecting Radio -->
